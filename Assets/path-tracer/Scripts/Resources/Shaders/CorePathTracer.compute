@@ -5,7 +5,7 @@
 //#define WIDTH 480
 //#define HEIGHT 360
 #define ASPECT WIDTH/HEIGHT
-#define SAMPS 8
+#define SAMPS 32
 
 // Create a RenderTexture with enableRandomWrite flag and set it
 // with cs.SetTexture
@@ -205,15 +205,15 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 	// generate ray directed at lower left corner of the screen
 	// compute directions for all other rays by adding cx and cy increments in x and y direction
 
-	camfwd.z *=-1.0f;
+	//camfwd.z *=-1.0f;
 	
 	float fov = camFOV * (M_PI / 180.0f);
 
 	float2 co = p * 2.0 - 1.0;
 	co.x *= (float)WIDTH / (float)HEIGHT;
 
-	Ray cam = MakeRay(float3((campos.x * 10.0f), (campos.y * 10.0f), (campos.z * 10.0f)), 
-			normalize(camfwd)); // first hardcoded camera ray(origin, direction) 
+	Ray cam = MakeRay(float3((campos.x), (campos.y), (campos.z)), 
+			normalize(-camfwd)); // first hardcoded camera ray(origin, direction) 
 	//float3 cx = /*camrgt * fov * ASPECT*/ float3(WIDTH * fov / HEIGHT, 0.0f, 0.0f); // ray direction offset in x direction
 	float3 cx = camrgt;// * (WIDTH * fov / HEIGHT);
 	float3 cy = camup; // ray direction offset in y direction (.5135 is field of view angle)
@@ -225,10 +225,10 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 	float Px = (2.0f * ((x - 0.5) / WIDTH) - 1) * imgAspect;
 	float Py = (1.0f - 2.0f * ((y - 0.5) / HEIGHT) );
 
-	float3 d = normalize(float3(-Px, Py, -1));	
+	float3 d = normalize(float3(Px, -Py, -1));	
 
-	float3 cop = mul(float3(1.0,1.0,1.0), camToWorld);
-	float3 cdp = mul(d, camToWorld);
+	float3 cop = camToWorld._m03_m13_m23;
+	float3 cdp = mul(camToWorld, d);
 	//cdp.x *= -1.0f;
 	float3 rdp = normalize(cdp.xyz);
 
@@ -240,7 +240,7 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 
 		// create primary ray, add incoming radiance to pixelcol or
 		//cam = MakeRay(cam.orig + d * 40, normalize(d));
-		r = r + radiance(MakeRay(cam.orig, rdp.xyz), s1, s2)*(1. / SAMPS);  
+		r = r + radiance(MakeRay(cop, rdp.xyz), s1, s2)*(1. / SAMPS);  
 		//r.x = cam.dir.x;
 	}        // Camera ra ys are pushed ^^^^^ forward to start in interior 
 	

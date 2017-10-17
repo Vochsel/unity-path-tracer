@@ -27,9 +27,10 @@ public class ptRenderer {
 
     public Texture tex;
 
-    public bool IsActive;
+    public bool IsActive = true;
 
     Sphere[] spheres = new Sphere[9];
+    List<Sphere> scene;
     ComputeBuffer buffer;
 
     int sampleCount = 0;
@@ -59,15 +60,49 @@ public class ptRenderer {
         //view = (CameraViewer)EditorWindow.GetWindow(typeof(CameraViewer));
 
 
-        spheres[0] = new Sphere(1e5f, new Vector3(1e5f + 1.0f, 40.8f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.75f, 0.75f, 0.25f));
-        spheres[1] = new Sphere(1e5f, new Vector3(-1e5f + 99.0f, 40.8f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .25f, .45f));
-        spheres[2] = new Sphere(1e5f, new Vector3(50.0f, 40.8f, 1e5f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .75f, .75f));
-        spheres[3] = new Sphere(1e5f, new Vector3(50.0f, 40.8f, -1e5f + 600.0f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.00f, 1.00f, 1.00f));
-        spheres[4] = new Sphere(1e5f, new Vector3(50.0f, 1e5f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .75f, .75f));
-        spheres[5] = new Sphere(1e5f, new Vector3(50.0f, -1e5f + 81.6f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .75f, .75f));
-        spheres[6] = new Sphere(16.5f, new Vector3(27.0f, 16.5f, 47.0f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.0f, 1.0f, 1.0f));
-        spheres[7] = new Sphere(16.5f, new Vector3(73.0f, 16.5f, 78.0f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.0f, 1.0f, 1.0f), 1);
-        spheres[8] = new Sphere(600.0f, new Vector3(50.0f, 681.6f - .77f, 81.6f), new Vector3(2.0f, 1.8f, 1.6f), new Vector3(0.0f, 0.0f, 0.0f));
+        scene = new List<Sphere>();
+
+        GameObject[] allSceneObjects = GameObject.FindGameObjectsWithTag("Renderable");
+
+        foreach(GameObject obj in allSceneObjects)
+        {
+            Renderer objRenderer = obj.GetComponent<Renderer>();
+            Material objMaterial = objRenderer.sharedMaterial;
+
+            Vector3 pos = objRenderer.bounds.center;
+            float rad = objRenderer.bounds.extents.magnitude / 1.75f;
+
+            Color diffuse = objMaterial.GetColor("_Color");
+            Vector3 diffVec = new Vector3(diffuse.r, diffuse.g, diffuse.b);
+
+            Color emission = objMaterial.GetColor("_EmissionColor");
+            Vector3 emiVec = new Vector3(emission.r, emission.g, emission.b);
+
+
+            Sphere newSceneObject = new Sphere(rad, pos, emiVec, diffVec, 0);
+            scene.Add(newSceneObject);
+        }
+
+        scene.Add(new Sphere(1e5f, new Vector3(1e5f - 5.0f, 40.8f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.75f, 0.75f, 0.25f)));
+        scene.Add(new Sphere(1e5f, new Vector3(-1e5f + 99.0f, 40.8f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .25f, .45f)));
+        scene.Add(new Sphere(1e5f, new Vector3(50.0f, 40.8f, 1e5f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .75f, .75f)));
+        scene.Add(new Sphere(1e5f, new Vector3(50.0f, 40.8f, -1e5f + 600.0f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.00f, 1.00f, 1.00f)));
+        scene.Add(new Sphere(1e5f, new Vector3(50.0f, 1e5f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .75f, .75f)));
+        scene.Add(new Sphere(1e5f, new Vector3(50.0f, -1e5f + 81.6f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .75f, .75f)));
+        //scene.Add(new Sphere(16.5f, new Vector3(27.0f, 16.5f, 47.0f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.0f, 1.0f, 1.0f)));
+        //scene.Add(new Sphere(16.5f, new Vector3(73.0f, 16.5f, 78.0f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.0f, 1.0f, 1.0f), 1));
+        scene.Add(new Sphere(600.0f, new Vector3(50.0f, 681.6f - .77f, 81.6f), new Vector3(2.0f, 1.8f, 1.6f), new Vector3(0.0f, 0.0f, 0.0f)));
+
+
+        //spheres[0] = new Sphere(1e5f, new Vector3(1e5f + 1.0f, 40.8f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.75f, 0.75f, 0.25f));
+        //spheres[1] = new Sphere(1e5f, new Vector3(-1e5f + 99.0f, 40.8f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .25f, .45f));
+        //spheres[2] = new Sphere(1e5f, new Vector3(50.0f, 40.8f, 1e5f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .75f, .75f));
+        //spheres[3] = new Sphere(1e5f, new Vector3(50.0f, 40.8f, -1e5f + 600.0f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.00f, 1.00f, 1.00f));
+        //spheres[4] = new Sphere(1e5f, new Vector3(50.0f, 1e5f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .75f, .75f));
+        //spheres[5] = new Sphere(1e5f, new Vector3(50.0f, -1e5f + 81.6f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .75f, .75f));
+        //spheres[6] = new Sphere(16.5f, new Vector3(27.0f, 16.5f, 47.0f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.0f, 1.0f, 1.0f));
+        //spheres[7] = new Sphere(16.5f, new Vector3(73.0f, 16.5f, 78.0f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.0f, 1.0f, 1.0f), 1);
+        //spheres[8] = new Sphere(600.0f, new Vector3(50.0f, 681.6f - .77f, 81.6f), new Vector3(2.0f, 1.8f, 1.6f), new Vector3(0.0f, 0.0f, 0.0f));
 
         //Transform s = transform.GetChild(0);
         //spheres[9] = new Sphere(10 * s.localScale.magnitude, new Vector3(s.position.x * 50, s.position.y * 50, s.position.z * 50), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.0f, 1.0f, 1.0f), 1);
@@ -84,20 +119,29 @@ public class ptRenderer {
 
         //if (buffer == null)
         {
-            buffer = new ComputeBuffer(spheres.Length, System.Runtime.InteropServices.Marshal.SizeOf(typeof(Sphere)));
-            buffer.SetData(spheres);
+            //buffer = new ComputeBuffer(spheres.Length, System.Runtime.InteropServices.Marshal.SizeOf(typeof(Sphere)));
+            //buffer.SetData(spheres);
+            // 
+
+            Sphere[] sceneArr = scene.ToArray();
+
+            buffer = new ComputeBuffer(sceneArr.Length, System.Runtime.InteropServices.Marshal.SizeOf(typeof(Sphere)));
+            buffer.SetData(sceneArr);
         }
     }
 
     public void StopRenderer()
     {
+        GameObject.DestroyImmediate(inputTex);
+        GameObject.DestroyImmediate(saveTex);
+        outputTex.Release();
         //buffer.fin();
         //outputTex.
     }
 
     public void ResetRenderer()
     {
-
+        StopRenderer();
         SetupRenderer();
         sampleCount = 0;
     }
@@ -122,6 +166,7 @@ public class ptRenderer {
         computeShader.SetVector("camrgt", ActiveCamera.transform.right);
         computeShader.SetVector("camup", ActiveCamera.transform.up);
         Matrix4x4 matrix = ActiveCamera.cameraToWorldMatrix;
+        //matrix = Matrix4x4.Transpose(matrix);
         float[] matrixFloats = new float[]
         {
             matrix[0,0], matrix[1, 0], matrix[2, 0], matrix[3, 0],
@@ -129,6 +174,7 @@ public class ptRenderer {
             matrix[0,2], matrix[1, 2], matrix[2, 2], matrix[3, 2],
             matrix[0,3], matrix[1, 3], matrix[2, 3], matrix[3, 3]
         };
+        
         computeShader.SetFloats("camToWorld", matrixFloats);
         computeShader.SetFloat("camFOV", ActiveCamera.fieldOfView);
         computeShader.SetFloat("time", Time.time);
