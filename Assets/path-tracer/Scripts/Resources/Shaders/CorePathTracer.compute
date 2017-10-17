@@ -1,0 +1,261 @@
+﻿// Each #kernel tells which function to compile; you can have many kernels
+#pragma kernel CSMain
+
+#define M_PI 3.14159265359f
+//#define WIDTH 480
+//#define HEIGHT 360
+#define ASPECT WIDTH/HEIGHT
+#define SAMPS 8
+
+// Create a RenderTexture with enableRandomWrite flag and set it
+// with cs.SetTexture
+Texture2D<float4> Input;
+RWTexture2D<float4> Result;
+
+float3 campos;
+float3 camfwd;
+float3 camrgt;
+float3 camup;
+float camFOV;
+float4x4 camToWorld;
+
+int WIDTH;
+int HEIGHT;
+
+float time;
+float textureWeight;
+
+struct Ray {
+	float3 orig;
+	float3 dir;
+	
+};
+
+Ray MakeRay(float3 a_origin, float3 a_dir) 
+{
+	Ray r;
+	r.orig = a_origin;
+	r.dir = a_dir;
+	return r;
+}
+
+struct Sphere {
+	float rad;
+	float3 pos, emi, col;
+	int type;
+
+	float intersect(inout Ray r, inout float depth)  {
+		float3 op = pos - r.orig;    // distance from ray.orig to center sphere 
+		float t, epsilon = 0.0001f;  // epsilon required to prevent floating point precision artefacts
+		float b = dot(op, r.dir);    // b in quadratic equation
+		float disc = b*b - dot(op, op) + rad*rad;  // discriminant quadratic equation
+		if (disc<0) return 0;       // if disc < 0, no real solution (we're not interested in complex roots) 
+		else disc = sqrt(disc);    // if disc >= 0, check for solutions using negative and positive discriminant
+		depth = disc * 2.0f;
+		return (t = b - disc)>epsilon ? t : ((t = b + disc)>epsilon ? t : 0); // pick closest point in front of ray origin
+	}
+};
+
+
+
+RWStructuredBuffer<Sphere> spheres;
+
+bool intersect_scene(inout Ray r, inout float t, inout int id, inout float cdepth) {
+
+	float n = 11, d, inf = t = 1e20;  // t is distance to closest intersection, initialise t to a huge number outside scene
+	
+	for (int i = int(n); i--;) { // test all scene objects for intersection
+		float dd = 0.0f;
+		//d = spheres[i].rad;
+		//if(spheres[i].rad < 17.0f)
+			//return true;
+		if ((d = spheres[i].intersect(r, dd)) && d < t) {  // if newly computed intersection distance d is smaller than current closest intersection distance
+			t = d;  // keep track of distance along ray to closest intersection point 
+			id = i; // and closest intersected object
+			cdepth = dd;
+			
+		}
+	}
+	return t<inf; // returns true if an intersection with the scene occurred, false when no hit
+}
+
+static float getrandom(inout uint seed0, inout uint seed1) {
+	seed0 = 36969 * ((seed0+ asuint(time)) & 65535) + ((seed0+ asuint(time)) >> 16);  // hash the seeds using bitwise AND and bitshifts
+	seed1 = 18000 * ((seed1+ asuint(time)) & 65535) + ((seed1+ asuint(time)) >> 16);
+
+	uint ires = ((seed0) << 16) + (seed1);
+
+	uint ui = (ires & 0x007fffff) | 0x40000000;  // bitwise AND, bitwise OR
+	float uf = asfloat(ui);
+
+	return (uf - 2.f) / 2.f;
+} 
+
+float3 radiance(Ray r2, inout uint s1, inout uint s2) { // returns ray color
+
+	float3 accucolor = float3(0.0f, 0.0f, 0.0f); // accumulates ray colour with each iteration through bounce loop
+	float3 mask = float3(1.0f, 1.0f, 1.0f);
+
+	Ray r;
+	r.orig = r2.orig;
+	r.dir = r2.dir;	
+
+	// ray bounce loop (no Russian Roulette used) 
+	for (int bounces = 0; bounces < 8; bounces++) {  // iteration up to 4 bounces (replaces recursion in CPU code)
+
+		float t;           // distance to closest intersection 
+		int id = 0;        // index of closest intersected sphere 
+
+						   // test ray for intersection with scene
+		float cdepth = 0.0f;
+		if (!intersect_scene(r, t, id, cdepth))
+			return float3(1.0f, 0.5f, 0.0f); // if miss, return black
+
+												  // else, we've got a hit!
+												  // compute hitpoint and normal
+		Sphere obj = spheres[id];  // hitobject
+		float3 x = r.orig + r.dir*t;          // hitpoint 
+		float3 n = normalize(x - obj.pos);    // normal
+		float3 nl = dot(n, r.dir) < 0 ? n : n * -1; // front facing normal
+
+													// add emission of current sphere to accumulated colour
+													// (first term in rendering equation sum) 
+		//switch (obj.type) {
+			//case 0:
+			//{
+				accucolor += mask * obj.emi;
+		
+				// create 2 random numbers
+				float r1 = 2 * M_PI * getrandom(s1, s2); // pick random number on unit circle (radius = 1, circumference = 2*Pi) for azimuth
+				float r2 = getrandom(s1, s2);  // pick random number for elevation
+				float r2s = sqrt(r2);
+
+				// compute local orthonormal basis uvw at hitpoint to use for calculation random ray direction 
+				// first vector = normal at hitpoint, second vector is orthogonal to first, third vector is orthogonal to first two vectors
+				float3 w = nl;
+				float3 u = normalize(cross((abs(w.x) > .1 ? float3(0, 1, 0) : float3(1, 0, 0)), w));
+				float3 v = cross(w, u);
+
+				// compute random ray direction on hemisphere using polar coordinates
+				// cosine weighted importance sampling (favours ray directions closer to normal direction)
+				float3 d = normalize(u*cos(r1)*r2s + v*sin(r1)*r2s + w*sqrt(1 - r2));
+
+				// new ray origin is intersection point of previous ray with scene
+				if (obj.type == 1) {
+					r.orig = x + nl*0.05f; // offset ray origin slightly to prevent self intersection
+					r.dir = reflect(r.dir, n);
+				} else {
+					r.orig = x + nl*0.05f; // offset ray origin slightly to prevent self intersection
+					r.dir = d;
+				}
+
+				mask.x *= obj.col.x;
+				mask.y *= obj.col.y;
+				mask.z *= obj.col.z;
+
+				//mask *= obj.col;    // multiply with colour of object       
+				mask *= dot(d, nl);  // weigh light contribution using cosine of angle between incident light and normal
+				mask *= 2;          // fudge factor
+			//}
+		//}
+			/*break;
+			case Refl_t::REFL:
+			{
+				// new ray origin is intersection point of previous ray with scene
+				r.orig = x + nl*0.05f; // offset ray origin slightly to prevent self intersection
+				r.dir = reflect(r.dir, n);
+			}
+			break;
+			case Refl_t::REFR:
+			{
+				// new ray origin is intersection point of previous ray with scene
+				//r.orig = x;// -nl * 0.05f; // offset ray origin slightly to prevent self intersection
+				r.dir = refract(r.dir, n, 1.1f);
+				r.orig = x + r.dir * (cdepth + 0.05f);
+			}
+			break;*/
+
+			
+		//}
+		
+	}
+
+	return accucolor;
+}
+
+inline float clamp(float x) { return x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x; }
+
+inline int toInt(float x) { return int(pow(clamp(x), 1 / 2.2) * 255 + .5); }  // convert RGB float in range [0,1] to int in range [0, 255] and perform gamma correction
+
+[numthreads(8,8,1)]
+void CSMain (uint3 id : SV_DispatchThreadID)
+{
+	float2 resolution = float2 (WIDTH,HEIGHT);
+    float2 coordinates = float2 (id.x,id.y);
+    float2 p = (coordinates.xy/resolution.xy);
+
+	uint x = coordinates.x;
+	uint y = coordinates.y;	
+
+	uint i = (HEIGHT - y - 1)*WIDTH + x; // index of current pixel (calculated using thread index) 
+
+	uint s1 = x;  // seeds for random number generator
+	uint s2 = y;
+
+	// generate ray directed at lower left corner of the screen
+	// compute directions for all other rays by adding cx and cy increments in x and y direction
+
+	camfwd.z *=-1.0f;
+	
+	float fov = camFOV * (M_PI / 180.0f);
+
+	float2 co = p * 2.0 - 1.0;
+	co.x *= (float)WIDTH / (float)HEIGHT;
+
+	Ray cam = MakeRay(float3((campos.x * 10.0f), (campos.y * 10.0f), (campos.z * 10.0f)), 
+			normalize(camfwd)); // first hardcoded camera ray(origin, direction) 
+	//float3 cx = /*camrgt * fov * ASPECT*/ float3(WIDTH * fov / HEIGHT, 0.0f, 0.0f); // ray direction offset in x direction
+	float3 cx = camrgt;// * (WIDTH * fov / HEIGHT);
+	float3 cy = camup; // ray direction offset in y direction (.5135 is field of view angle)
+	float3 r; // r is final pixel color       
+
+	r = float3(0.0f, 0.0f, 0.0f); // reset r to zero for every pixel 
+	float imgAspect = (float)WIDTH / (float)HEIGHT;
+	float properFov = tan(camFOV / 2.0f * M_PI / 180.0f);
+	float Px = (2.0f * ((x - 0.5) / WIDTH) - 1) * imgAspect;
+	float Py = (1.0f - 2.0f * ((y - 0.5) / HEIGHT) );
+
+	float3 d = normalize(float3(-Px, Py, -1));	
+
+	float3 cop = mul(float3(1.0,1.0,1.0), camToWorld);
+	float3 cdp = mul(d, camToWorld);
+	//cdp.x *= -1.0f;
+	float3 rdp = normalize(cdp.xyz);
+
+	for (int s = 0; s < SAMPS; s++) {  // samples per pixel
+
+									   // compute primary ray direction
+		//float3 d = normalize(cam.dir + (cx * co.x) + (cy * co.y));
+
+
+		// create primary ray, add incoming radiance to pixelcol or
+		//cam = MakeRay(cam.orig + d * 40, normalize(d));
+		r = r + radiance(MakeRay(cam.orig, rdp.xyz), s1, s2)*(1. / SAMPS);  
+		//r.x = cam.dir.x;
+	}        // Camera ra ys are pushed ^^^^^ forward to start in interior 
+	
+			// write rgb value of pixel to image buffer on the GPU, clamp value to [0.0f, 1.0f] range
+	float4 outt = float4(clamp(r.x, 0.0f, 1.0f), clamp(r.y, 0.0f, 1.0f), clamp(r.z, 0.0f, 1.0f), 1.0);
+	
+	float v = ((r.x + r.y + r.z) / 3.0);
+
+	/*if(time < 0.5f)
+		Result[id.xy] = outt;
+	else*/
+	Result[id.xy] = lerp(outt, Input[id.xy], textureWeight);
+	//Result[id.xy] = outt;
+ 
+	//Result[id.xy] = float4(id.x & id.y, (id.x & 15)/15.0, (id.y & 15)/15.0, 1.0);
+	//Result[id.xy] = outt;
+	//Result[id.xy] = float4(cx.x, outt.y, outt.z, 1.0);
+}
