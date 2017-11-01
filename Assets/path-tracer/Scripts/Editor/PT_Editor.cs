@@ -70,8 +70,6 @@ public class PT_Editor : EditorWindow {
 
 	void OnGUI()
     {
-        //Debug.Log("PT_Editor On GUI");
-        //Draw texture
         GUI.DrawTexture(new Rect(0.0f, 0.0f, position.width, position.height), previewTex, ScaleMode.ScaleToFit);
 
         if (GUILayout.Button("Pause Render"))
