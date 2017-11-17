@@ -2,13 +2,10 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+using System.IO;
+
 public class ptRenderer {
 
-    public struct ptMaterial
-    {
-        public Vector4 albedo, emission;
-        public float metallic, smoothness;
-    }
 
     public struct Sphere
     {
@@ -27,23 +24,34 @@ public class ptRenderer {
         }
     };
 
+  
+
     public struct Triangle
     {
         public Vector3 v0, v1, v2, normal;
+        public uint objIdx;
 
-        public Triangle(Vector3 a_v0, Vector3 a_v1, Vector3 a_v2, Vector3 a_normal)
+        public Triangle(Vector3 a_v0, Vector3 a_v1, Vector3 a_v2, Vector3 a_normal, uint a_objIdx)
         {
             v0 = a_v0;
             v1 = a_v1;
             v2 = a_v2;
             normal = a_normal;
+            objIdx = a_objIdx;
+        }
+
+        public override string ToString()
+        {
+            return "[" + v0 + " : " + v1 + " : " + v2 + "]";
         }
     };
 
     public struct ptMesh
     {
         public ptMaterial material;
-        ComputeBuffer triangles;
+        //ComputeBuffer triangles;
+        Triangle[] triangles;
+        int numTris;
         Matrix4x4 transform;
         public ptMesh(string a_name, ptMaterial a_mat, GameObject a_mesh)
         {
@@ -52,7 +60,7 @@ public class ptRenderer {
 
 
             transform = a_mesh.transform.localToWorldMatrix;
-            
+            triangles = new Triangle[16];
             MeshFilter mf = a_mesh.GetComponent<MeshFilter>();
             for (var i = 0; i < mf.sharedMesh.triangles.Length; i += 3)
             {
@@ -61,27 +69,31 @@ public class ptRenderer {
                 Vector3 v2 = mf.sharedMesh.vertices[mf.sharedMesh.triangles[i + 2]];
 
                 Vector3 n = mf.sharedMesh.normals[mf.sharedMesh.triangles[i]];
-
-                //v0 = mesh.transform.TransformPoint(v0);
-                //v1 = mesh.transform.TransformPoint(v1);
-                //v2 = mesh.transform.TransformPoint(v2);
-
+                
                 v0 = new Vector4(v0.x, v0.y, v0.z, 1.0f);
                 v1 = new Vector4(v1.x, v1.y, v1.z, 1.0f);
                 v2 = new Vector4(v2.x, v2.y, v2.z, 1.0f);
 
+                int triIdx = (int)(i / 3.0f);
 
-                Debug.Log(v0 + " : " + v1 + " + " + v2);
-
-                triangleMesh.Add(new Triangle(v0, v1, v2, n));
+                // Debug.Log(v0 + " : " + v1 + " + " + v2);
+                triangles[triIdx] = new Triangle(v0, v1, v2, n, 0);
+                Debug.Log("num: " + triIdx);
+                Debug.Log(triangles[triIdx]);
+                
+                //triangleMesh.Add(new Triangle(v0, v1, v2, n));
             }
 
-            triangles = new ComputeBuffer(triangleMesh.Count, System.Runtime.InteropServices.Marshal.SizeOf(typeof(Triangle)));
-            triangles.SetData(triangleMesh.ToArray());
-
+            triangles = new Triangle[16];
+            //triangleMesh.CopyTo(triangles);
+            numTris = mf.sharedMesh.triangles.Length / 3;
+            Debug.Log("Number of Tris: " + numTris);
             
+            Debug.Log(triangles.Length);
+            //triangles = new ComputeBuffer(triangleMesh.Count, System.Runtime.InteropServices.Marshal.SizeOf(typeof(Triangle)));
+            //triangles.SetData(triangleMesh.ToArray());
         }
-        
+
     };
 
     public ComputeShader computeShader;
@@ -98,21 +110,30 @@ public class ptRenderer {
     List<Triangle> triangleMesh;
     List<ptMesh> meshes;
 
+    ptObjectHandler[] objects;
+
     ComputeBuffer buffer;
     ComputeBuffer triBuffer;
     ComputeBuffer meshBuffer;
+
+    ComputeBuffer objectsBuffer;
 
     int sampleCount = 0;
 
     public bool CacheChanges = false;
 
-    public int Width = 460;
-    public int Height = 360;
+    public int Width = 1080;
+    public int Height = 720;
 
     Camera ActiveCamera;
 
-    public void SetupRenderer()
+    ptRenderSettings currentRenderSettings;
+
+    public void SetupRenderer(ptRenderSettings a_renderSettings)
     {
+        Width = a_renderSettings.outputWidth;
+        Height = a_renderSettings.outputHeight;
+
         computeShader = Resources.Load<ComputeShader>("Shaders/CorePathTracer");
        
             ActiveCamera = Camera.main;
@@ -126,11 +147,16 @@ public class ptRenderer {
         saveTex = new Texture2D(Width, Height, TextureFormat.ARGB32, false);
         scene = new List<Sphere>();
         triangleMesh = new List<Triangle>();
+        
+
 
         GameObject[] allSceneObjects = GameObject.FindGameObjectsWithTag("Renderable");
+        int numObjects = allSceneObjects.Length;
+        objects = new ptObjectHandler[numObjects];
 
-        foreach(GameObject obj in allSceneObjects)
+        for (int i = 0; i < numObjects; i++)
         {
+            GameObject obj = allSceneObjects[i];
             Renderer objRenderer = obj.GetComponent<Renderer>();
             Material objMaterial = objRenderer.sharedMaterial;
 
@@ -139,11 +165,16 @@ public class ptRenderer {
 
             //http://answers.unity3d.com/questions/914923/standard-shader-emission-control-via-script.html
 
-            Color diffuse = objMaterial.GetColor("_Color");            
+            Color diffuse = objMaterial.GetColor("_Color");
             Color emission = objMaterial.GetColor("_EmissionColor");
+            Debug.Log(objMaterial.IsKeywordEnabled("_EMISSION"));
+            if (!objMaterial.IsKeywordEnabled("_EMISSION"))
+            {
+                emission = Color.black;
+            }
+            
             float metallic = objMaterial.GetFloat("_Metallic");
             float glossiness = objMaterial.GetFloat("_Glossiness");
-
             ptMaterial mat = new ptMaterial();
 
             mat.albedo = diffuse;
@@ -151,84 +182,51 @@ public class ptRenderer {
             mat.metallic = metallic;
             mat.smoothness = glossiness;
 
-            Sphere newSceneObject = new Sphere(rad, pos, new Vector3(0,0,0), ((Vector4)diffuse), mat);
-            scene.Add(newSceneObject);
-        }
+            ptShapeType st = ptShapeType.SPHERE;
 
-
-
-        ptMaterial mat2 = new ptMaterial();
-
-
-        //scene.Add(new Sphere(1e5f, new Vector3(1e5f - 5.0f, 40.8f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(0.75f, 0.75f, 0.25f)));
-        //scene.Add(new Sphere(1e5f, new Vector3(-1e5f + 99.0f, 40.8f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .25f, .45f)));
-        //scene.Add(new Sphere(1e5f, new Vector3(50.0f, 40.8f, 1e5f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .75f, .75f)));
-        scene.Add(new Sphere(1e5f, new Vector3(50.0f, 40.8f, -1e5f + 600.0f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.00f, 1.00f, 1.00f), mat2));
-        //scene.Add(new Sphere(1e5f, new Vector3(50.0f, 1e5f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .75f, .75f), mat2));
-        //scene.Add(new Sphere(1e5f, new Vector3(50.0f, -1e5f + 81.6f, 81.6f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(.75f, .75f, .75f), mat2));
-        //scene.Add(new Sphere(16.5f, new Vector3(27.0f, 16.5f, 47.0f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.0f, 1.0f, 1.0f)));
-        //scene.Add(new Sphere(16.5f, new Vector3(73.0f, 16.5f, 78.0f), new Vector3(0.0f, 0.0f, 0.0f), new Vector3(1.0f, 1.0f, 1.0f), 1));
-        //scene.Add(new Sphere(600.0f, new Vector3(50.0f, 681.6f - .77f, 81.6f), new Vector3(2.0f, 1.8f, 1.6f), new Vector3(0.0f, 0.0f, 0.0f), mat2));
-
-        buffer = new ComputeBuffer(scene.Count, System.Runtime.InteropServices.Marshal.SizeOf(typeof(Sphere)));
-        buffer.SetData(scene.ToArray());
-
-        meshes = new List<ptMesh>();
-
-        GameObject mesh = GameObject.Find("testMesh");
-        ptMesh mm = new ptMesh("", mat2, mesh);
-        meshes.Add(mm);
-
-        meshBuffer = new ComputeBuffer(meshes.Count, System.Runtime.InteropServices.Marshal.SizeOf(typeof(ptMesh)));
-        meshBuffer.SetData(meshes.ToArray());
-
-        if (mesh)
-        {
-            MeshFilter mf = mesh.GetComponent<MeshFilter>();
-            for (var i = 0; i < mf.sharedMesh.triangles.Length; i += 3)
+            MeshFilter mf = obj.GetComponent<MeshFilter>();
+            switch(mf.sharedMesh.name)
             {
-                Vector3 v0 = mf.sharedMesh.vertices[mf.sharedMesh.triangles[i]];
-                Vector3 v1 = mf.sharedMesh.vertices[mf.sharedMesh.triangles[i + 1]];
-                Vector3 v2 = mf.sharedMesh.vertices[mf.sharedMesh.triangles[i + 2]];
-
-                Vector3 n = mf.sharedMesh.normals[mf.sharedMesh.triangles[i]];
-                
-                //v0 = mesh.transform.TransformPoint(v0);
-                //v1 = mesh.transform.TransformPoint(v1);
-                //v2 = mesh.transform.TransformPoint(v2);
-                
-                v0 = new Vector4(v0.x, v0.y, v0.z, 1.0f);
-                v1 = new Vector4(v1.x, v1.y, v1.z, 1.0f);
-                v2 = new Vector4(v2.x, v2.y, v2.z, 1.0f);
-
-
-                Debug.Log(v0 + " : " + v1 + " + " + v2);
-                
-                triangleMesh.Add(new Triangle(v0, v1, v2, n));
+                case "Sphere":
+                    st = ptShapeType.SPHERE;
+                    Debug.Log("Found Sphere");
+                    break;
+                case "Plane":
+                    st = ptShapeType.PLANE;
+                    Debug.Log("Found Plane");
+                    break;
+                case "Cube":
+                    st = ptShapeType.BOX;
+                    Debug.Log("Found Box");
+                    break;
             }
+
+            ptObjectHandler newSceneObject = new ptObjectHandler(mat, obj.transform, st);
+            //Debug.Log(newSceneObject.transform);
+            //objects.Add(newSceneObject);
+            objects[i] = newSceneObject;
         }
-        if (triangleMesh.Count > 0)
+
+        if (objectsBuffer != null)
         {
-            Debug.Log(triangleMesh.Count);
-            Debug.Log("Making buffer");
-            triBuffer = new ComputeBuffer(triangleMesh.Count, System.Runtime.InteropServices.Marshal.SizeOf(typeof(Triangle)));
-            triBuffer.SetData(triangleMesh.ToArray());
+            objectsBuffer.Dispose();
+            objectsBuffer.Release();
+            objectsBuffer = null;
+            Debug.Log("Destroyed old buffer");
         }
+
+        objectsBuffer = new ComputeBuffer(numObjects, System.Runtime.InteropServices.Marshal.SizeOf(typeof(ptObject)));
+
+        UploadObjects();
 
         int kernelHandle = computeShader.FindKernel("CSMain");
-        computeShader.SetBuffer(kernelHandle, "spheres", buffer);
-        if (triBuffer != null)
-        {
-            Debug.Log("Uploading buffer");
-            computeShader.SetBuffer(kernelHandle, "triangleMesh", triBuffer);
-        }
+        ComputeBuffer settingsBuffer = new ComputeBuffer(1, System.Runtime.InteropServices.Marshal.SizeOf(typeof(ptRenderSettings)));
+        ptRenderSettings[] ptrs = new ptRenderSettings[1];
+        ptrs[0] = a_renderSettings;
+        settingsBuffer.SetData(ptrs);
 
-        if (meshBuffer != null)
-        {
-            Debug.Log("Uploading mesh buffer");
-            computeShader.SetBuffer(kernelHandle, "meshesProper", meshBuffer);
-        }
-
+        computeShader.SetBuffer(kernelHandle, "SETTINGS", settingsBuffer);
+       
     }
 
     public void StopRenderer()
@@ -236,14 +234,17 @@ public class ptRenderer {
         GameObject.DestroyImmediate(inputTex);
         GameObject.DestroyImmediate(saveTex);
         outputTex.Release();
-        buffer.Dispose();
+        objectsBuffer.Dispose();
+        objectsBuffer = null;
     }
 
-    public void ResetRenderer()
+    public void ResetRenderer(ptRenderSettings a_renderSettings)
     {
+        currentRenderSettings = a_renderSettings;
         StopRenderer();
-        SetupRenderer();
+        SetupRenderer(a_renderSettings);
         sampleCount = 0;
+        IsActive = true;
     }
 
     public void ResetSamples()
@@ -261,13 +262,30 @@ public class ptRenderer {
             ResetSamples();
 
         int kernelHandle = computeShader.FindKernel("CSMain");
+        //computeShader.SetBuffer(kernelHandle, "objects", objectsBuffer);
+
+        bool shouldUpload = false;
+        for(int i = 0; i < objects.Length; i++)
+        {
+            if (!objects[i].transform)
+            {
+                ResetRenderer(currentRenderSettings);
+                return outputTex;
+            }
+            shouldUpload = objects[i].Handle() ? true : shouldUpload;
+        }
+        
+
+        if(shouldUpload)
+            UploadObjects();
+
         //computeShader.SetBuffer(kernelHandle, "spheres", buffer);
         //if (triBuffer != null)
         //{
         //    Debug.Log("Uploading buffer");
         //    computeShader.SetBuffer(kernelHandle, "triangleMesh", triBuffer);
         //}
-        
+
 
         Matrix4x4 matrix = ActiveCamera.cameraToWorldMatrix;
         float[] matrixFloats = new float[]
@@ -287,8 +305,8 @@ public class ptRenderer {
             matrixWTC[0,3], matrixWTC[1, 3], matrixWTC[2, 3], matrixWTC[3, 3]
         };
 
-        Debug.Log(matrix);
-        Debug.Log(matrixWTC);
+        //Debug.Log(matrix);
+        //Debug.Log(matrixWTC);
 
         computeShader.SetFloats("camToWorld", matrixFloats);
         computeShader.SetFloats("worldToCam", matrixWTCFloats);
@@ -316,5 +334,40 @@ public class ptRenderer {
         sampleCount++;
 
         return outputTex;
+    }
+
+    public void SaveRenderToFile(string a_path)
+    {
+        byte[] bytes = saveTex.EncodeToPNG();
+        File.WriteAllBytes(Application.dataPath + a_path + "render - " + System.DateTime.Now.ToString("yyMMddHHmmss") + ".png", bytes);
+    }
+
+    void UploadObjects()
+    {
+        if (objects.Length > 0)
+        {
+            Debug.Log("Found " + objects.Length + " objects!");
+            Debug.Log("Making buffer");
+            int numObjects = objects.Length;
+            
+
+            ptObject[] tempObjects = new ptObject[numObjects];
+
+            for (int i = 0; i < numObjects; i++)
+            {
+                //objects[i].Handle();
+                tempObjects[i] = objects[i].handledObject;
+              //  Debug.Log(objects[i].handledObject.worldMatrix);
+
+            }
+
+            objectsBuffer.SetData(tempObjects);
+            int kernelHandle = computeShader.FindKernel("CSMain");
+            if (objectsBuffer != null)
+            {
+                Debug.Log("Uploading buffer");
+                computeShader.SetBuffer(kernelHandle, "objects", objectsBuffer);
+            }
+        }
     }
 }
