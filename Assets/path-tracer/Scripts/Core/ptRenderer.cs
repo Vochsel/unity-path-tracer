@@ -131,6 +131,8 @@ public class ptRenderer {
 
     public void SetupRenderer(ptRenderSettings a_renderSettings)
     {
+        
+        Debug.Log(a_renderSettings.outputWidth);
         Width = a_renderSettings.outputWidth;
         Height = a_renderSettings.outputHeight;
 
@@ -140,6 +142,7 @@ public class ptRenderer {
         
         outputTex = new RenderTexture(Width, Height, (int)RenderTextureFormat.ARGB32);
         outputTex.enableRandomWrite = true;
+        
         outputTex.Create();
         
         inputTex = new Texture2D(Width, Height, TextureFormat.ARGB32, false, true);
@@ -233,9 +236,13 @@ public class ptRenderer {
     {
         GameObject.DestroyImmediate(inputTex);
         GameObject.DestroyImmediate(saveTex);
-        outputTex.Release();
-        objectsBuffer.Dispose();
-        objectsBuffer = null;
+        if(outputTex)
+            outputTex.Release();
+        if (objectsBuffer != null)
+        {
+            objectsBuffer.Dispose();
+            objectsBuffer = null;
+        }
     }
 
     public void ResetRenderer(ptRenderSettings a_renderSettings)

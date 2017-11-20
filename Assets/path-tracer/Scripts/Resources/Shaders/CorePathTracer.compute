@@ -255,10 +255,13 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) { // returns ray color
 	
 		ptHit sceneHit;
 
-		if (!intersect_scene(r, t, id, cdepth, sceneHit))
-			return float3(0.,0.,0.);
+		if (!intersect_scene(r, t, id, cdepth, sceneHit)) {
+			//accucolor += mask * float3(0.9,0.9,0.9);
+			return accucolor;
+		}
 
 		ptObject obj = objects[id];  // hitobject
+
 		float3 x = r.orig + r.dir*t;          // hitpoint 
 		//float3 n = normalize(x - obj.transform._m03_m13_m23);    // normal
 		float3 n = sceneHit.normal;
@@ -266,9 +269,22 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) { // returns ray color
 		
 
 
-		float3 L = normalize(float3(0, -1., 0.));
-		//accucolor += mask / M_PI * 20.0f * float3(0.9, 0.9, 0.9) * max(0.f, dot(n, L));
-		accucolor += mask * obj.material.emission;
+		float3 L = -normalize(float3(1., -5., .2));
+
+		int sid = 0;
+		float scdepth = 0.0f, st = 0.0f;
+		ptHit ssdepth;
+		Ray sray = MakeRay(x + nl*EPSILON, L);
+
+		accucolor += mask * obj.material.emission;// * ((dot(nl, L)) * 10.0);
+		//mask *= float3(0.9,0.9,0.9);// * ((dot(nl, L)) * 10.0);
+		//accucolor += mask * 100;// * ((dot(nl, L)) * 10.0);
+			
+		//if(bounces == 0)
+			
+			//mask *= max(0.f, dot(nl, L));
+
+
 		
 		// create 2 random numbers
 		float r1 = 2 * M_PI * getrandom(s1, s2); // pick random number on unit circle (radius = 1, circumference = 2*Pi) for azimuth
@@ -286,7 +302,7 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) { // returns ray color
 		float3 d = normalize(u*cos(r1)*r2s + v*sin(r1)*r2s + w*sqrt(1 - r2));
 		//d = lerp(d, reflDir, obj.material.metallic);
 		float3 reflDir = reflect(r.dir, n);
-		r.orig = x + nl*0.025f;
+		r.orig = x + nl*EPSILON;
 		//r.dir = d;
 		r.dir = lerp(d, reflDir, obj.material.metallic);
 				
@@ -295,8 +311,10 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) { // returns ray color
 
 		//mask.x *= obj.col.x;    
 		mask *= dot(d, nl);  // weigh light contribution using cosine of angle between incident light and normal
-		//mask *= 1.5;          // fudge factor	
+		mask *= 1.5;          // fudge factor	
 		
+		//if(!intersect_scene(sray, st, sid, scdepth, ssdepth))
+			//accucolor += mask * max(0.f, dot(nl, L));		
 	}
 
 	return accucolor;

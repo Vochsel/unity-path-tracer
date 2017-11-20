@@ -2,6 +2,11 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+public struct ptCamera
+{
+
+}
+
 public struct ptMaterial
 {
     public Vector4 albedo, emission;

@@ -6,7 +6,7 @@ Material:
   m_ObjectHideFlags: 0
   m_PrefabParentObject: {fileID: 0}
   m_PrefabInternal: {fileID: 0}
-  m_Name: Emission
+  m_Name: Emission_Green
   m_Shader: {fileID: 46, guid: 0000000000000000f000000000000000, type: 0}
   m_ShaderKeywords: _EMISSION
   m_LightmapFlags: 1
@@ -73,4 +73,4 @@ Material:
     - _ZWrite: 1
     m_Colors:
     - _Color: {r: 0.9558824, g: 0.57634085, b: 0.57634085, a: 1}
-    - _EmissionColor: {r: 1.444853, g: 1.444853, b: 1.444853, a: 1}
+    - _EmissionColor: {r: 0.36535504, g: 1.3429265, b: 0.53390235, a: 1}
