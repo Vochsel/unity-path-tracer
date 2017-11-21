@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 
 using System.IO;
+using System;
 
 public class ptRenderer {
 
@@ -112,11 +113,14 @@ public class ptRenderer {
 
     ptObjectHandler[] objects;
 
+    ptLightHandler[] lights;
+
     ComputeBuffer buffer;
     ComputeBuffer triBuffer;
     ComputeBuffer meshBuffer;
 
     ComputeBuffer objectsBuffer;
+    ComputeBuffer lightBuffer;
 
     int sampleCount = 0;
 
@@ -150,7 +154,36 @@ public class ptRenderer {
         saveTex = new Texture2D(Width, Height, TextureFormat.ARGB32, false);
         scene = new List<Sphere>();
         triangleMesh = new List<Triangle>();
-        
+
+
+        Light[] allLights = GameObject.FindObjectsOfType<Light>();
+        int numLights = allLights.Length;
+        lights = new ptLightHandler[numLights];
+
+
+        for (int j = 0; j < numLights; j++)
+        {
+            Light l = allLights[j];
+
+            ptLightHandler newLightObject = new ptLightHandler(l);
+            lights[j] = newLightObject;
+        }
+
+
+        if (lightBuffer != null)
+        {
+            lightBuffer.Dispose();
+            lightBuffer.Release();
+            lightBuffer = null;
+            Debug.Log("Destroyed old buffer");
+        }
+
+        if (numLights > 0)
+        {
+            lightBuffer = new ComputeBuffer(numLights, System.Runtime.InteropServices.Marshal.SizeOf(typeof(ptLight)));
+
+            UploadLights();
+        }
 
 
         GameObject[] allSceneObjects = GameObject.FindGameObjectsWithTag("Renderable");
@@ -218,9 +251,12 @@ public class ptRenderer {
             Debug.Log("Destroyed old buffer");
         }
 
-        objectsBuffer = new ComputeBuffer(numObjects, System.Runtime.InteropServices.Marshal.SizeOf(typeof(ptObject)));
+        if (numObjects > 0)
+        {
+            objectsBuffer = new ComputeBuffer(numObjects, System.Runtime.InteropServices.Marshal.SizeOf(typeof(ptObject)));
 
-        UploadObjects();
+            UploadObjects();
+        }
 
         int kernelHandle = computeShader.FindKernel("CSMain");
         ComputeBuffer settingsBuffer = new ComputeBuffer(1, System.Runtime.InteropServices.Marshal.SizeOf(typeof(ptRenderSettings)));
@@ -271,6 +307,8 @@ public class ptRenderer {
         int kernelHandle = computeShader.FindKernel("CSMain");
         //computeShader.SetBuffer(kernelHandle, "objects", objectsBuffer);
 
+        // -- Update Objects
+
         bool shouldUpload = false;
         for(int i = 0; i < objects.Length; i++)
         {
@@ -282,9 +320,23 @@ public class ptRenderer {
             shouldUpload = objects[i].Handle() ? true : shouldUpload;
         }
         
-
         if(shouldUpload)
             UploadObjects();
+
+        // -- Update Lights
+        bool shouldUploadLights = false;
+        for(int j = 0; j < lights.Length; j++)
+        {
+            if(!lights[j].lightRef)
+            {
+                ResetRenderer(currentRenderSettings);
+                return outputTex;
+            }
+            shouldUploadLights = lights[j].Handle() ? true : shouldUploadLights;
+        }
+
+        if (shouldUploadLights)
+            UploadLights();
 
         //computeShader.SetBuffer(kernelHandle, "spheres", buffer);
         //if (triBuffer != null)
@@ -374,6 +426,31 @@ public class ptRenderer {
             {
                 Debug.Log("Uploading buffer");
                 computeShader.SetBuffer(kernelHandle, "objects", objectsBuffer);
+            }
+        }
+    }
+
+    void UploadLights()
+    {
+        if(lights.Length > 0)
+        {
+            Debug.Log("Found " + lights.Length + " lights!");
+
+            int numLights = lights.Length;
+
+            ptLight[] tempLights = new ptLight[numLights];
+
+            for(int i = 0; i < numLights; i++)
+            {
+                tempLights[i] = lights[i].handledLight;
+            }
+
+            lightBuffer.SetData(tempLights);
+            int kHandle = computeShader.FindKernel("CSMain");
+            if(lightBuffer != null)
+            {
+                Debug.Log("Uploading lights");
+                computeShader.SetBuffer(kHandle, "lights", lightBuffer);
             }
         }
     }

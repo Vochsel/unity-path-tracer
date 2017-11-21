@@ -21,6 +21,16 @@ struct ptHit
 	float3 normal;
 };
 
+/* ==== Light ==== */
+struct ptLight
+{
+	float3 color;
+    float intensity;
+    float range;
+    uint lightType;
+    float4x4 worldMatrix;
+};
+
 /* ==== BVH ==== */
 
 struct BVHNode

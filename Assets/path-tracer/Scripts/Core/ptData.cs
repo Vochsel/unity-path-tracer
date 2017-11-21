@@ -75,14 +75,32 @@ public struct ptLight
 {
     public Vector3 color;
     public float intensity;
+    public float range;
     public uint lightType;
     public Matrix4x4 worldMatrix;
 
-    public ptLight(Light a_light)
+    public ptLight(Vector3 a_color, float a_intensity, float a_range, uint a_lightType, Matrix4x4 a_worldMatrix)
     {
-        color = new Vector3(a_light.color.r, a_light.color.g, a_light.color.b);
-        intensity = a_light.intensity;
-        worldMatrix = a_light.transform.localToWorldMatrix;
+        color = a_color;
+        intensity = a_intensity;
+        range = a_range;
+        lightType = a_lightType;
+        worldMatrix = a_worldMatrix;
+    }
+}
+
+public struct ptLightHandler
+{
+    public ptLight handledLight;
+    public Light lightRef;
+
+    public ptLightHandler(Light a_light)
+    {
+        Vector3 color = new Vector3(a_light.color.r, a_light.color.g, a_light.color.b);
+        float intensity = a_light.intensity;
+        float range = a_light.range;
+        Matrix4x4 worldMatrix = a_light.transform.localToWorldMatrix;
+        uint lightType = 0;
         switch (a_light.type)
         {
             case LightType.Point: lightType = (uint)ptLightType.POINT; break;
@@ -90,12 +108,27 @@ public struct ptLight
             case LightType.Spot: lightType = (uint)ptLightType.SPOT; break;
             default: lightType = (uint)ptLightType.DIRECTIONAL; break;
         }
+
+        lightRef = a_light;
+        handledLight = new ptLight(color, intensity, range, lightType, worldMatrix);
     }
-}
 
-public struct ptLightHandler
-{
+    public bool Handle()
+    {
+        bool isDirty = false;
 
+        if (lightRef.transform.hasChanged || (handledLight.range != lightRef.range) || (handledLight.intensity != lightRef.intensity) ||)
+        {
+            handledLight.intensity = lightRef.intensity;
+            handledLight.range = lightRef.range;
+
+            handledLight.worldMatrix = lightRef.transform.localToWorldMatrix;
+            isDirty = true;
+            lightRef.transform.hasChanged = false;
+        }
+
+        return isDirty;
+    }
 }
 
 
