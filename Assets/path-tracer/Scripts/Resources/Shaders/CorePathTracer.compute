@@ -60,9 +60,9 @@ float intersect_plane(ptObject plane, inout Ray r, inout float t, inout ptHit a_
 	float3 pos = plane.transform._m03_m13_m23;
 	float3 dim = float3(length(plane.transform._m00_m01_m02), length(plane.transform._m10_m11_m12), length(plane.transform._m20_m21_m22));
 	
-	float3 n = normalize(mul((plane.transform), float4(0., -1., 0., 0.)));
-	float3 fwd = normalize(mul((plane.transform), float4(1, 0., 0., 0.)));
-	float3 rgt = normalize(mul((plane.transform), float4(0., 0., 1, 0.)));
+	float3 n	= normalize(mul((plane.transform), float4(0., -1., 0., 0.))).xyz;
+	float3 fwd	= normalize(mul((plane.transform), float4(1, 0., 0., 0.))).xyz;
+	float3 rgt	= normalize(mul((plane.transform), float4(0., 0., 1, 0.))).xyz;
 	float3 dd = dim;
 	a_hit.normal = n;
 
@@ -74,7 +74,7 @@ float intersect_plane(ptObject plane, inout Ray r, inout float t, inout ptHit a_
 		float3 hpos = r.orig + r.dir * t; 
 		float3 hdist = ((hpos - pos));
 	
-		float3 lhdist = mul(plane.invTransform, hdist);
+		float3 lhdist = mul(plane.invTransform, float4(hdist.x, hdist.y, hdist.z, 0.0)).xyz;
 
 		float ll = 5.0;
 		float l1 = length(fwd) * 5;
@@ -203,7 +203,7 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) { // returns ray color
 		float3 n = sceneHit.normal;
 		float3 nl = dot(n, r.dir) < 0 ? n : n * -1; // front facing normal
 		
-		accucolor += mask * obj.material.emission;
+		accucolor += mask * obj.material.emission.xyz;
 		
 		// create 2 random numbers
 		float r1 = 2 * M_PI * getrandom(s1, s2); // pick random number on unit circle (radius = 1, circumference = 2*Pi) for azimuth
@@ -225,10 +225,13 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) { // returns ray color
 		r.dir = lerp(d, reflDir, obj.material.metallic);
 				
 
-		mask *= obj.material.albedo;
+		mask *= obj.material.albedo.xyz;
  
 		mask *= dot(d, nl);  // weigh light contribution using cosine of angle between incident light and normal
 		mask *= 1.5;          // fudge factor	
+
+		if(bounces > 0)
+			continue;
 
 		uint numLights, lightStride;
 		lights.GetDimensions(numLights, lightStride);
@@ -245,15 +248,15 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) { // returns ray color
 				if(lights[i].lightType == 0) {
 					float3 lightPos = lights[i].worldMatrix._m03_m13_m23;
 					L = (lightPos - x);
+					L /= lights[i].range/8.0;
 					falloff = length(L);
-								
-					L /= lights[i].range;
+					L = normalize(L);		
 
-					lightPower = lights[i].intensity / (4. * M_PI * falloff);
+					lightPower = lights[i].intensity * (1./falloff);// / (4. * M_PI * (1./falloff));
 				}
 				//Directional
 				else if(lights[i].lightType == 1) {
-					L = normalize(mul(lights[i].worldMatrix, float4(0., 0., -1., 0.)));
+					L = normalize(mul(lights[i].worldMatrix, float4(0., 0., -1., 0.))).xyz;
 					falloff = 1.;
 					lightPower = lights[i].intensity;
 				}
@@ -261,7 +264,7 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) { // returns ray color
 				int sid = 0;
 				float scdepth = 0.0f, st = 0.0f;
 				ptHit ssdepth;
-				Ray sray = MakeRay(x + (nl*EPSILON), L + d * 0.25);
+				Ray sray = MakeRay(x + (nl*EPSILON), L + (d * 0.2));
 	
 				if(!intersect_scene(sray, st, sid, scdepth, ssdepth)) {
 					accucolor += mask * max(0.f, dot(nl, L)) * lights[i].color * lightPower;

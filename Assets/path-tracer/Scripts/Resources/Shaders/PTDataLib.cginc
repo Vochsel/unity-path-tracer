@@ -1,6 +1,3 @@
-// Each #kernel tells which function to compile; you can have many kernels
-#pragma once
-
 /* ==== Ray Data ==== */
 
 struct Ray {

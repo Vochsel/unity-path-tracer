@@ -32,13 +32,13 @@ public class PT_Editor : EditorWindow {
 
     void OnEnable()
     {
-        Debug.Log("PT_Editor Enable");
+        //Debug.Log("PT_Editor Enable");
         StartEditorPreview();
     }
 
     void OnDisable()
     {
-        Debug.Log("PT_Editor Disable");
+        //Debug.Log("PT_Editor Disable");
         StopEditorPreview();
     }
 
