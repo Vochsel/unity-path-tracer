@@ -61,6 +61,7 @@ public struct ptObjectHandler
         {
          //   Debug.Log(handledObject.worldMatrix);
             handledObject.worldMatrix = transform.localToWorldMatrix;
+            //Debug.Log(handledObject.worldMatrix);
             handledObject.invWorldMatrix = transform.worldToLocalMatrix;
             isDirty = true;
             transform.hasChanged = false;
@@ -117,7 +118,7 @@ public struct ptLightHandler
     {
         bool isDirty = false;
 
-        if (lightRef.transform.hasChanged || (handledLight.range != lightRef.range) || (handledLight.intensity != lightRef.intensity) ||)
+        if (lightRef.transform.hasChanged || (handledLight.range != lightRef.range) || (handledLight.intensity != lightRef.intensity))
         {
             handledLight.intensity = lightRef.intensity;
             handledLight.range = lightRef.range;

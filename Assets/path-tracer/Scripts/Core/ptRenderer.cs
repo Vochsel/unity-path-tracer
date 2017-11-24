@@ -186,13 +186,19 @@ public class ptRenderer {
         }
 
 
-        GameObject[] allSceneObjects = GameObject.FindGameObjectsWithTag("Renderable");
-        int numObjects = allSceneObjects.Length;
-        objects = new ptObjectHandler[numObjects];
+
+        //GameObject[] allSceneObjects = GameObject.FindGameObjectsWithTag("Renderable");
+        MeshFilter[] allMeshes = GameObject.FindObjectsOfType<MeshFilter>();
+        
+        int numObjects = allMeshes.Length;
+        
+
+        List<ptObjectHandler> outputObjects = new List<ptObjectHandler>();
 
         for (int i = 0; i < numObjects; i++)
         {
-            GameObject obj = allSceneObjects[i];
+            MeshFilter mf = allMeshes[i];
+            GameObject obj = mf.gameObject;
             Renderer objRenderer = obj.GetComponent<Renderer>();
             Material objMaterial = objRenderer.sharedMaterial;
 
@@ -220,16 +226,18 @@ public class ptRenderer {
 
             ptShapeType st = ptShapeType.SPHERE;
 
-            MeshFilter mf = obj.GetComponent<MeshFilter>();
+
             switch(mf.sharedMesh.name)
             {
                 case "Sphere":
                     st = ptShapeType.SPHERE;
                     Debug.Log("Found Sphere");
+                    outputObjects.Add(new ptObjectHandler(mat, obj.transform, st));
                     break;
                 case "Plane":
                     st = ptShapeType.PLANE;
                     Debug.Log("Found Plane");
+                    outputObjects.Add(new ptObjectHandler(mat, obj.transform, st));
                     break;
                 case "Cube":
                     st = ptShapeType.BOX;
@@ -237,10 +245,16 @@ public class ptRenderer {
                     break;
             }
 
-            ptObjectHandler newSceneObject = new ptObjectHandler(mat, obj.transform, st);
+            //ptObjectHandler newSceneObject = new ptObjectHandler(mat, obj.transform, st);
             //Debug.Log(newSceneObject.transform);
             //objects.Add(newSceneObject);
-            objects[i] = newSceneObject;
+            //objects[i] = newSceneObject;
+        }
+
+        objects = new ptObjectHandler[outputObjects.Count];
+        for(int z = 0; z < outputObjects.Count; z++)
+        {
+            objects[z] = outputObjects[z];
         }
 
         if (objectsBuffer != null)
