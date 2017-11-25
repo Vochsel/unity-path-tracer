@@ -10,13 +10,8 @@ public class ptRenderer {
     public ComputeShader computeShader;
 
     public RenderTexture outputTex;
-    public Texture2D inputTex;
     public Texture2D saveTex;
-
-    public Texture tex;
-
-    public bool IsActive = true;
-    
+        
     ptObjectHandler[] objects;
     ptLightHandler[] lights;
 
@@ -27,6 +22,7 @@ public class ptRenderer {
     int sampleCount = 0;
 
     public bool CacheChanges = false;
+    public bool IsActive = true;
 
     public int Width = 1080;
     public int Height = 720;
@@ -35,6 +31,7 @@ public class ptRenderer {
 
     public static ptRenderSettings currentRenderSettings;
 
+    // -- Setup Renderer
     public void SetupRenderer(ptRenderSettings a_renderSettings)
     {
         ActiveCamera = Camera.main;
@@ -44,24 +41,31 @@ public class ptRenderer {
             return;
         }
 
-        Width = a_renderSettings.outputWidth;
-        Height = a_renderSettings.outputHeight;
+        ptRenderSettings options = a_renderSettings;
+
+        if (options.outputWidth == 0) options.outputWidth = 1280;
+        if (options.outputHeight == 0) options.outputHeight = 720;
+        if (options.samples == 0) options.samples = 3;
+        if (options.bounces == 0) options.bounces = 2;
+
+        Width = options.outputWidth;
+        Height = options.outputHeight;
+
+        // -- Create required resources
 
         computeShader = Resources.Load<ComputeShader>("Shaders/CorePathTracer");
-       
-        
+               
         outputTex = new RenderTexture(Width, Height, (int)RenderTextureFormat.ARGB32);
         outputTex.enableRandomWrite = true;
         
         outputTex.Create();
         
-        inputTex = new Texture2D(Width, Height, TextureFormat.ARGB32, false, true);
         saveTex = new Texture2D(Width, Height, TextureFormat.ARGB32, false);
 
+        // -- Setup Lights
         Light[] allLights = GameObject.FindObjectsOfType<Light>();
         int numLights = allLights.Length;
         lights = new ptLightHandler[numLights];
-
 
         for (int j = 0; j < numLights; j++)
         {
@@ -70,7 +74,6 @@ public class ptRenderer {
             ptLightHandler newLightObject = new ptLightHandler(l);
             lights[j] = newLightObject;
         }
-
 
         if (lightBuffer != null)
         {
@@ -87,10 +90,9 @@ public class ptRenderer {
             UploadLights();
         }
 
+        // -- Setup objects 
         MeshFilter[] allMeshes = GameObject.FindObjectsOfType<MeshFilter>();
-        
-        int numObjects = allMeshes.Length;
-        
+        int numObjects = allMeshes.Length;        
         List<ptObjectHandler> outputObjects = new List<ptObjectHandler>();
 
         for (int i = 0; i < numObjects; i++)
@@ -105,7 +107,6 @@ public class ptRenderer {
 
             Color diffuse = objMaterial.GetColor("_Color");
             Color emission = objMaterial.GetColor("_EmissionColor");
-            //Debug.Log(objMaterial.IsKeywordEnabled("_EMISSION"));
             if (!objMaterial.IsKeywordEnabled("_EMISSION"))
             {
                 emission = Color.black;
@@ -121,23 +122,19 @@ public class ptRenderer {
             mat.smoothness = glossiness;
 
             ptShapeType st = ptShapeType.SPHERE;
-
-
+            
             switch(mf.sharedMesh.name)
             {
                 case "Sphere":
                     st = ptShapeType.SPHERE;
-                  //  Debug.Log("Found Sphere");
                     outputObjects.Add(new ptObjectHandler(mat, obj.transform, st));
                     break;
                 case "Plane":
                     st = ptShapeType.PLANE;
-                   // Debug.Log("Found Plane");
                     outputObjects.Add(new ptObjectHandler(mat, obj.transform, st));
                     break;
                 case "Cube":
                     st = ptShapeType.BOX;
-                   // Debug.Log("Found Box");
                     break;
             }
             
@@ -160,26 +157,22 @@ public class ptRenderer {
         if (numObjects > 0)
         {
             objectsBuffer = new ComputeBuffer(numObjects, System.Runtime.InteropServices.Marshal.SizeOf(typeof(ptObject)));
-
             UploadObjects();
         }
 
         int kernelHandle = computeShader.FindKernel("CSMain");
         settingsBuffer = new ComputeBuffer(1, System.Runtime.InteropServices.Marshal.SizeOf(typeof(ptRenderSettings)));
+
         ptRenderSettings[] ptrs = new ptRenderSettings[1];
-        ptrs[0] = a_renderSettings;
+        ptrs[0] = options;
         settingsBuffer.SetData(ptrs);
 
         computeShader.SetBuffer(kernelHandle, "SETTINGS", settingsBuffer);
-
     }
 
-    
-
+    // -- Stop renderer
     public void StopRenderer()
     {
-        if(inputTex != null)
-            GameObject.DestroyImmediate(inputTex);
         if (saveTex != null)
             GameObject.DestroyImmediate(saveTex);
         if(outputTex)
@@ -201,6 +194,7 @@ public class ptRenderer {
         }
     }
 
+    // -- Reset Renderer
     public void ResetRenderer(ptRenderSettings a_renderSettings)
     {
         currentRenderSettings = a_renderSettings;
@@ -210,14 +204,15 @@ public class ptRenderer {
         IsActive = true;
     }
 
+    // -- Reset Samples
     public void ResetSamples()
     {
         sampleCount = 0;
     }
 
+    // -- Execute shader, pass buffers, check for scene changes
     public RenderTexture RunShader()
     {
-
         if (ActiveCamera == null)
         {
             if (Camera.main != null)
@@ -254,6 +249,7 @@ public class ptRenderer {
             UploadObjects();
 
         // -- Update Lights
+
         bool shouldUploadLights = false;
         for(int j = 0; j < lights.Length; j++)
         {
@@ -268,6 +264,7 @@ public class ptRenderer {
         if (shouldUploadLights)
             UploadLights();
         
+        // -- Update camera
 
         Matrix4x4 matrix = ActiveCamera.cameraToWorldMatrix;
         float[] matrixFloats = new float[]
@@ -287,6 +284,7 @@ public class ptRenderer {
             matrixWTC[0,3], matrixWTC[1, 3], matrixWTC[2, 3], matrixWTC[3, 3]
         };
         
+        // -- Pass uniforms
 
         computeShader.SetFloats("camToWorld", matrixFloats);
         computeShader.SetFloats("worldToCam", matrixWTCFloats);
@@ -300,11 +298,11 @@ public class ptRenderer {
         computeShader.SetTexture(kernelHandle, "Result", outputTex);
         computeShader.Dispatch(kernelHandle, Width / 8, Height / 8, 1);
 
+        // -- Save and swap textures
+
         RenderTexture.active = outputTex;
         saveTex.ReadPixels(new Rect(0, 0, Width, Height), 0, 0);
         saveTex.Apply();
-        inputTex.ReadPixels(new Rect(0, 0, Width, Height), 0, 0);
-        inputTex.Apply();
 
         RenderTexture.active = null;
         saveTex.name = "Render";
@@ -316,47 +314,42 @@ public class ptRenderer {
         return outputTex;
     }
 
+
+    // -- Save image to png at path
     public void SaveRenderToFile(string a_path)
     {
         byte[] bytes = saveTex.EncodeToPNG();
         File.WriteAllBytes(Application.dataPath + a_path + "render - " + System.DateTime.Now.ToString("yyMMddHHmmss") + ".png", bytes);
     }
 
+    // -- Update object buffer to GPU
     void UploadObjects()
     {
         if (objects.Length > 0)
         {
-           // Debug.Log("Found " + objects.Length + " objects!");
-          //  Debug.Log("Making buffer");
             int numObjects = objects.Length;
             
-
             ptObject[] tempObjects = new ptObject[numObjects];
 
             for (int i = 0; i < numObjects; i++)
             {
-                //objects[i].Handle();
                 tempObjects[i] = objects[i].handledObject;
-              //  Debug.Log(objects[i].handledObject.worldMatrix);
-
             }
 
             objectsBuffer.SetData(tempObjects);
             int kernelHandle = computeShader.FindKernel("CSMain");
             if (objectsBuffer != null)
             {
-             //   Debug.Log("Uploading buffer");
                 computeShader.SetBuffer(kernelHandle, "objects", objectsBuffer);
             }
         }
     }
 
+    // -- Upload light buffer to GPU
     void UploadLights()
     {
         if(lights.Length > 0)
         {
-            //Debug.Log("Found " + lights.Length + " lights!");
-
             int numLights = lights.Length;
 
             ptLight[] tempLights = new ptLight[numLights];
@@ -370,7 +363,6 @@ public class ptRenderer {
             int kHandle = computeShader.FindKernel("CSMain");
             if(lightBuffer != null)
             {
-                //Debug.Log("Uploading lights");
                 computeShader.SetBuffer(kHandle, "lights", lightBuffer);
             }
         }

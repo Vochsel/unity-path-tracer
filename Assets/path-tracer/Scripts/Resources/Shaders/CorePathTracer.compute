@@ -19,87 +19,25 @@ float time;
 float textureWeight;
  
 #include "PTDataLib.cginc"
+#include "PTMaths.cginc"
 
 StructuredBuffer<ptRenderSettings> SETTINGS; 
 
 RWStructuredBuffer<ptObject> objects;
 RWStructuredBuffer<ptLight> lights;
 
-float intersect_sphere(ptObject sph, inout Ray r, inout float depth, inout ptHit a_hit)
-{
-	float3 pos = sph.transform._m03_m13_m23;
-
-	float3 scale = float3(length(sph.transform._m00_m01_m02), length(sph.transform._m10_m11_m12), length(sph.transform._m20_m21_m22));
-	float rad = length(scale) * 0.5f;
-	rad = length(sph.transform._m00_m01_m02) / 2.0f;
-
-	float3 op = pos - r.orig;    // distance from ray.orig to center sphere 
-	float t;  // epsilon required to prevent floating point precision artefacts
-	float b = dot(op, r.dir);    // b in quadratic equation
-	float disc = b*b - dot(op, op) + rad*rad;  // discriminant quadratic equation
-	if (disc<0) return 0;       // if disc < 0, no real solution (we're not interested in complex roots) 
-	else disc = sqrt(disc);    // if disc >= 0, check for solutions using negative and positive discriminant
-	depth = disc * 2.0f;
-	
-	float3 x = r.orig + r.dir*(b - disc);          // hitpoint 
-	a_hit.normal = normalize(x - pos);
-
-	return (t = b - disc)>EPSILON ? t : ((t = b + disc)>EPSILON ? t : 0); // pick closest point in front of ray origin
-}
-
-float intersect_box(ptObject box, inout Ray r, inout float depth, inout ptHit a_hit)
-{
-	float3 pos = box.transform._m03_m13_m23;
-	float3 bounds = float3(box.transform._m00, box.transform._m11, box.transform._m22);
-	a_hit.normal = float3(0., 0., 0.);
-	return 0.0f;
-}
-
-float intersect_plane(ptObject plane, inout Ray r, inout float t, inout ptHit a_hit)
-{
-	float3 pos = plane.transform._m03_m13_m23;
-	float3 dim = float3(length(plane.transform._m00_m01_m02), length(plane.transform._m10_m11_m12), length(plane.transform._m20_m21_m22));
-	
-	float3 n	= normalize(mul((plane.transform), float4(0., -1., 0., 0.))).xyz;
-	float3 fwd	= normalize(mul((plane.transform), float4(1, 0., 0., 0.))).xyz;
-	float3 rgt	= normalize(mul((plane.transform), float4(0., 0., 1, 0.))).xyz;
-	float3 dd = dim;
-	a_hit.normal = n;
-
-	float denom = dot(n, r.dir); 
-    if (denom > 1e-6) { 
-        float3 p0l0 = pos - r.orig; 
-        t = dot(p0l0, n) / denom; 
-	
-		float3 hpos = r.orig + r.dir * t; 
-		float3 hdist = ((hpos - pos));
-	
-		float3 lhdist = mul(plane.invTransform, float4(hdist.x, hdist.y, hdist.z, 0.0)).xyz;
-
-		float ll = 5.0;
-		float l1 = length(fwd) * 5;
-		float l2 = length(rgt) * 5;
-
-		float s1 = dot(hdist, fwd);
-		float s2 = dot(hdist, rgt);
-	
-		if(lhdist.x > -ll && lhdist.x < ll)		
-				if(lhdist.z > -ll && lhdist.z < ll)	
-					return (t)>EPSILON ? t : ((t)>EPSILON ? t : 0); 
-    } 
-
-	return 0.0f;
-}
-
 bool intersect_scene(inout Ray r, inout float t, inout int id, inout float cdepth, inout ptHit a_hit) {
 
-	float n = 6, d, inf = t = 1e20;  // t is distance to closest intersection, initialise t to a huge number outside scene
+	// Initialize scene variables
+	float n = 6, d, inf = t = 1e20;
 	float dd = 0.0f;
+	ptHit tHit;
 
-
+	// Get number of objects in buffer
 	uint numObjects, stride;
 	objects.GetDimensions(numObjects, stride);
-	ptHit tHit;
+
+	// For all objects, check intersection based on type
 	for(int i = int(numObjects); i--;) {
 
 		switch(objects[i].shapeType) 
@@ -107,9 +45,10 @@ bool intersect_scene(inout Ray r, inout float t, inout int id, inout float cdept
 			// -- Box
 			case 1:
 			{
-				if ((d = intersect_box(objects[i], r, dd, tHit)) && d < t) {  // if newly computed intersection distance d is smaller than current closest intersection distance
-					t = d;  // keep track of distance along ray to closest intersection point 
-					id = i; // and closest intersected object
+				// Not implemented, just draw sphere
+				if ((d = intersect_sphere(objects[i], r, dd, tHit)) && d < t) {
+					t = d;
+					id = i;
 					cdepth = dd;
 					a_hit = tHit;
 				}
@@ -119,20 +58,21 @@ bool intersect_scene(inout Ray r, inout float t, inout int id, inout float cdept
 			// -- Plane
 			case 2:
 			{
-				if ((d = intersect_plane(objects[i], r, dd, tHit)) && d < t) {  // if newly computed intersection distance d is smaller than current closest intersection distance
-					t = d;  // keep track of distance along ray to closest intersection point 
-					id = i; // and closest intersected object
+				if ((d = intersect_plane(objects[i], r, dd, tHit)) && d < t) {
+					t = d;
+					id = i;
 					cdepth = dd;
 					a_hit = tHit;
 				}
 			}
 			break;
 
+			// -- Worst case just draw sphere
 			default:
 			{
-				if ((d = intersect_sphere(objects[i], r, dd, tHit)) && d < t) {  // if newly computed intersection distance d is smaller than current closest intersection distance
-					t = d;  // keep track of distance along ray to closest intersection point 
-					id = i; // and closest intersected object
+				if ((d = intersect_sphere(objects[i], r, dd, tHit)) && d < t) {
+					t = d;
+					id = i;
 					cdepth = dd;
 					a_hit = tHit;
 				}
@@ -141,98 +81,101 @@ bool intersect_scene(inout Ray r, inout float t, inout int id, inout float cdept
 		}
 	}
 
-	return t<inf; // returns true if an intersection with the scene occurred, false when no hit
+	// Return true if hit scene, else return false
+	return t<inf;
 }
 
 static float origRand(inout uint s0, inout uint s1) {
-	//seed0 = 36969 * ((seed0+ asuint(time)) & 65535) + ((seed0+ asuint(time)) >> 16);  // hash the seeds using bitwise AND and bitshifts
-	//seed1 = 18000 * ((seed1+ asuint(time)) & 65535) + ((seed1+ asuint(time)) >> 16);
+	uint offset = asuint(textureWeight); // Default offset
+	//uint offset = asuint(time); // Time offset	
 
-	s0 = 36969 * ((s0 + asuint(textureWeight)) & 65535) + ((s0 + asuint(textureWeight)) >> 16);  // hash the seeds using bitwise AND and bitshifts
-	s1 = 18000 * ((s1 + asuint(textureWeight)) & 65535) + ((s1 + asuint(textureWeight)) >> 16);
+	// Hash seeds and shift
+	s0 = 36969 * ((s0 + offset) & 65535) + ((s0 + offset) >> 16);
+	s1 = 18000 * ((s1 + offset) & 65535) + ((s1 + offset) >> 16);
 
 	uint ires = ((s0) << 16) + (s1);
 
-	uint ui = (ires & 0x007fffff) | 0x40000000;  // bitwise AND, bitwise OR
+	uint ui = (ires & 0x007fffff) | 0x40000000;
 	float uf = asfloat(ui);
 
 	return (uf - 2.f) / 2.f;
 }
 
-static float rand(uint s0, uint s1){ 
-	s0 = asuint((s0 * 12.9898));
-	s1 = asuint((s1 * 78.233));
-	return frac(sin(s0 + s1) * 43758.5453);
-}
-
 static float getrandom(inout uint seed0, inout uint seed1) {
 	return origRand(seed0, seed1);
-	//return  rand(seed0, seed1);
 } 
 
-float3 radiance(Ray r2, inout uint s1, inout uint s2) { // returns ray color
+// Calculate ray colour and accumulated radiance for the scene
+float3 radiance(Ray r2, inout uint s1, inout uint s2) {
 
-	float3 accucolor = float3(0.0f, 0.0f, 0.0f); // accumulates ray colour with each iteration through bounce loop
+	// Accumulates colou
+	float3 accucolor = float3(0.0f, 0.0f, 0.0f);
 	float3 mask = float3(1.0f, 1.0f, 1.0f);
 
-	Ray r;
-	r.orig = r2.orig;
-	r.dir = r2.dir;	
+	Ray r = MakeRay(r2.orig, r2.dir);
 
 	int MAXBOUNCE = SETTINGS[0].bounces;
 
-	// ray bounce loop (no Russian Roulette used) 
-	for (int bounces = 0; bounces < MAXBOUNCE; bounces++) {  // iteration up to 4 bounces (replaces recursion in CPU code)
+	// Ray bounce
+	for (int bounces = 0; bounces < MAXBOUNCE; bounces++) {
 
-		float t;           // distance to closest intersection 
-		int id = 0;        // index of closest intersected sphere 
+		// Closest intersection distance
+		float t;
+		// Object index
+		int id = 0;
 
-						   // test ray for intersection with scene
 		float cdepth = 0.0f;
 	
 		ptHit sceneHit;
 
 		if (!intersect_scene(r, t, id, cdepth, sceneHit)) {
-			//accucolor += mask * float3(0.9,0.9,0.9);
-			return accucolor;
+			break; //return accucolor;
 		}
 
-		ptObject obj = objects[id];  // hitobject
+		// Object that was hit
+		ptObject obj = objects[id];
 
-		float3 x = r.orig + r.dir*t;          // hitpoint 
+		float3 x = sceneHit.position;
 		float3 n = sceneHit.normal;
-		float3 nl = dot(n, r.dir) < 0 ? n : n * -1; // front facing normal
+
+		// Front facing normal
+		float3 nl = dot(n, r.dir) < 0 ? n : n * -1;
 		
 		accucolor += mask * obj.material.emission.xyz;
 		
-		// create 2 random numbers
-		float r1 = 2 * M_PI * getrandom(s1, s2); // pick random number on unit circle (radius = 1, circumference = 2*Pi) for azimuth
-		float r2 = getrandom(s1, s2);  // pick random number for elevation
+		// Generate two random numbers in hemisphere
+		float r1 = 2 * M_PI * getrandom(s1, s2);
+		float r2 = getrandom(s1, s2);
 		float r2s = sqrt(r2);
  
-		// compute local orthonormal basis uvw at hitpoint to use for calculation random ray direction 
-		// first vector = normal at hitpoint, second vector is orthogonal to first, third vector is orthogonal to first two vectors
+		// Compute local orthonormal basis uvw at hitpoint to use for calculation random ray direction 
+		// First vector = normal at hitpoint, second vector is orthogonal to first, third vector is orthogonal to first two vectors
 		float3 w = nl;
 		float3 u = normalize(cross((abs(w.x) > .1 ? float3(0, 1, 0) : float3(1, 0, 0)), w));
 		float3 v = cross(w, u);
 
-		// compute random ray direction on hemisphere using polar coordinates
-		// cosine weighted importance sampling (favours ray directions closer to normal direction)
+		// Compute random ray direction on hemisphere using polar coordinates
+		// Cosine weighted importance sampling (favours ray directions closer to normal direction)
 		float3 d = normalize(u*cos(r1)*r2s + v*sin(r1)*r2s + w*sqrt(1 - r2));
 		
+		// Compute reflected dir
 		float3 reflDir = reflect(r.dir, n);
 		r.orig = x + nl*EPSILON;
 		r.dir = lerp(d, reflDir, obj.material.metallic);
-				
 
 		mask *= obj.material.albedo.xyz;
  
-		mask *= dot(d, nl);  // weigh light contribution using cosine of angle between incident light and normal
-		mask *= 1.5;          // fudge factor	
+		// Weigh light contribution using cosine of angle between incident light and normal
+		mask *= dot(d, nl);
 
+		// Fudge mask
+		mask *= 1.5;
+
+		// Return if not first bounce
 		if(bounces > 0)
 			continue;
 
+		// Look for lights and accumulate lighting information
 		uint numLights, lightStride;
 		lights.GetDimensions(numLights, lightStride);
 		if(numLights > 0) {
@@ -240,11 +183,9 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) { // returns ray color
 
 				float falloff = 0.0;
 				float lightPower = 0.0;
-
-				//float3 L = -normalize(float3(1., -5., .2));
 				float3 L = float3(0., 0., 0.);
 
-				//Point
+				// Point light
 				if(lights[i].lightType == 0) {
 					float3 lightPos = lights[i].worldMatrix._m03_m13_m23;
 					L = (lightPos - x);
@@ -252,9 +193,9 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) { // returns ray color
 					falloff = length(L);
 					L = normalize(L);		
 
-					lightPower = lights[i].intensity * (1./falloff);// / (4. * M_PI * (1./falloff));
+					lightPower = lights[i].intensity * (1./falloff);
 				}
-				//Directional
+				// Directional light
 				else if(lights[i].lightType == 1) {
 					L = normalize(mul(lights[i].worldMatrix, float4(0., 0., -1., 0.))).xyz;
 					falloff = 1.;
@@ -277,10 +218,6 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) { // returns ray color
 	return accucolor;
 }
 
-inline float clamp(float x) { return x < 0.0f ? 0.0f : x > 1.0f ? 1.0f : x; }
-
-inline int toInt(float x) { return int(pow(clamp(x), 1 / 2.2) * 255 + .5); }  // convert RGB float in range [0,1] to int in range [0, 255] and perform gamma correction
-
 [numthreads(8,8,1)]
 void CSMain (uint3 id : SV_DispatchThreadID)
 {
@@ -294,12 +231,16 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 	uint x = coordinates.x;
 	uint y = coordinates.y;	
 
-	uint i = (hh - y - 1)*ww + x; // index of current pixel (calculated using thread index) 
+	// Current pixel index
+	uint i = (hh - y - 1)*ww + x;
 
-	uint s1 = x ;  // seeds for random number generator
+	// Random seeds
+	uint s1 = x ;
 	uint s2 = y ;
 
 	float fov = camFOV * (M_PI / 180.0f);
+
+	// Calculate ray direction for pixel
 
 	float2 co = p * 2.0 - 1.0;
 	co.x *= (float)ww / (float)hh;
@@ -307,7 +248,6 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 	float3 r = float3(0.0f, 0.0f, 0.0f); 
 
 	float imgAspect = (float)ww / (float)hh;
-	//float properFov = tan(camFOV / 2.0f * M_PI / 180.0f);
 	float Px = (2.0f * ((x - 0.5) / ww) - 1) * imgAspect;
 	float Py = (1.0f - 2.0f * ((y - 0.5) / hh) );
 
@@ -316,11 +256,14 @@ void CSMain (uint3 id : SV_DispatchThreadID)
 	float3 cop = camToWorld._m03_m13_m23;
 	float3 cdp = normalize(mul(camToWorld, d).xyz).xyz;
 
+	// Compute samples
 	for (int s = 0; s < SETTINGS[0].samples; s++) { 
 		r = r + radiance(MakeRay(cop, cdp), s1, s2)*(1. / SETTINGS[0].samples);
 	}
 
+	// Pixel output
 	float4 outt = float4(r.x, r.y, r.z, 1.0);
 	
+	// Blend with last render to converge final image
 	Result[id.xy] = lerp(outt, Input[id.xy], textureWeight);
 }

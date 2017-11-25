@@ -138,11 +138,20 @@ public struct ptLightHandler
     }
 }
 
-
 public struct ptRenderSettings
 {
     public int outputWidth, outputHeight;
     public int samples, bounces;
+    
+
+    public ptRenderSettings(int x = 0)
+    {
+        outputWidth = 1280;
+        outputHeight = 720;
+
+        samples = 4;
+        bounces = 3;
+    }
 
     public ptRenderSettings(int a_w, int a_h, int a_s, int a_b)
     {

@@ -15,10 +15,12 @@ Ray MakeRay(float3 a_origin, float3 a_dir)
 
 struct ptHit
 {
+	float3 position;
 	float3 normal;
 };
 
 /* ==== Light ==== */
+
 struct ptLight
 {
 	float3 color;
@@ -66,14 +68,19 @@ struct Sphere {
 	ptMaterial material;
 
 	float intersect(inout Ray r, inout float depth)  {
-		float3 op = pos - r.orig;    // distance from ray.orig to center sphere 
-		float t, epsilon = 0.000000001f;  // epsilon required to prevent floating point precision artefacts
-		float b = dot(op, r.dir);    // b in quadratic equation
-		float disc = b*b - dot(op, op) + rad*rad;  // discriminant quadratic equation
-		if (disc<0) return 0;       // if disc < 0, no real solution (we're not interested in complex roots) 
-		else disc = sqrt(disc);    // if disc >= 0, check for solutions using negative and positive discriminant
+		//Vector from position to ray origin
+		float3 op = pos - r.orig;
+		float t, epsilon = 0.000000001f;
+		float b = dot(op, r.dir);
+
+		//Equation discriminant
+		float disc = b*b - dot(op, op) + rad*rad;
+		//Return if complex roots
+		if (disc<0) return 0;
+		else disc = sqrt(disc);
 		depth = disc * 2.0f;
-		return (t = b - disc)>epsilon ? t : ((t = b + disc)>epsilon ? t : 0); // pick closest point in front of ray origin
+		//Return closest point
+		return (t = b - disc)>epsilon ? t : ((t = b + disc)>epsilon ? t : 0);
 	}
 };
 
