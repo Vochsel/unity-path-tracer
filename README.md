@@ -1,8 +1,10 @@
 # unity-path-tracer
 GPU Powered Path Tracer built directly for Unity. Created for my bachelor degree subject: Software Development 4.
 
+Development Blog: [Link](http://benjaminskinner.com.au/SD4-Blog/)
+
 ## Demo Video
-[![IMAGE ALT TEXT HERE](http://img.youtube.com/vi/n__q2TgbKGM/0.jpg)](http://www.youtube.com/watch?v=n__q2TgbKGM)
+[![Youtube Demonstration](http://img.youtube.com/vi/n__q2TgbKGM/0.jpg)](http://www.youtube.com/watch?v=n__q2TgbKGM)
 
 ## Rendered Images
 
