@@ -17,11 +17,11 @@ public class PT_Editor : EditorWindow {
     //public uint rWidth = 1280, rHeight = 720, rSamples = 4, rBounces = 8;
     public ptRenderSettings renderSettings = new ptRenderSettings(1280, 720, 2, 4);
 
+    int CameraSelected = 1;
 
     [MenuItem("PathTracer/Render View")]
     static void Init()
-    {
-
+    {       
         //mainGSkin.
 
         PT_Editor window = GetWindow<PT_Editor>();
@@ -46,6 +46,7 @@ public class PT_Editor : EditorWindow {
     {
         EditorApplication.update = EditorUpdate;
         renderer = new ptRenderer();
+        
         renderer.SetupRenderer(renderSettings);
     }
     
@@ -138,6 +139,43 @@ public class PT_Editor : EditorWindow {
                     renderer.SaveRenderToFile("/../Renders/");
                 }
 
+                Camera[] cameras = GameObject.FindObjectsOfType<Camera>();
+
+                string[] options = new string[1 + cameras.Length];
+
+                options[0] = "Editor Camera";
+
+                for (int i = 0; i < cameras.Length; i++)
+                {
+                    options[i + 1] = cameras[i].name;
+                }
+
+                EditorGUI.BeginChangeCheck();
+                CameraSelected = EditorGUILayout.Popup(CameraSelected, options);
+
+                if (EditorGUI.EndChangeCheck())
+                {
+                    if (CameraSelected == 0)
+                    {
+                        
+
+                        renderer.SetCamera(SceneView.lastActiveSceneView.camera);
+                    }
+                    else if ((CameraSelected - 1) < cameras.Length)
+                        renderer.SetCamera(cameras[CameraSelected - 1]);
+
+                    //Change camera
+                    Debug.Log("Changed Camera!");
+                }
+
+
+                if (GUILayout.Button("Camera from view"))
+                {
+                    
+                    Camera cam = Instantiate(SceneView.lastActiveSceneView.camera);
+                    renderer.SetCamera(cam);
+                }
+
                 GUILayout.EndScrollView();
             }
 
@@ -155,5 +193,6 @@ public class PT_Editor : EditorWindow {
 
         /**/
     }
-    
+
+
 }

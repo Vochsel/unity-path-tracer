@@ -12,13 +12,15 @@ public class ptRenderer {
     public RenderTexture outputTex;
     public Texture2D saveTex;
         
-    ptObjectHandler[] objects;
-    ptLightHandler[] lights;
+    List<ptObjectHandler> objects;
+    List<ptLightHandler> lights;
 
     ComputeBuffer objectsBuffer;
     ComputeBuffer lightBuffer;
     ComputeBuffer settingsBuffer;
-    
+
+    ComputeBuffer meshBuffer;
+
     int sampleCount = 0;
 
     public bool CacheChanges = false;
@@ -34,11 +36,19 @@ public class ptRenderer {
     // -- Setup Renderer
     public void SetupRenderer(ptRenderSettings a_renderSettings)
     {
-        ActiveCamera = Camera.main;
+        
+        //int size = System.Runtime.InteropServices.Marshal.SizeOf(typeof(ptCacheFriendlyBVHNode));
+        //Debug.Log("CFBNS is " + size);
+
         if (ActiveCamera == null)
         {
-            Debug.Log("Could not setup renderer; No camera!");
-            return;
+            ActiveCamera = Camera.main;
+
+            if (ActiveCamera == null)
+            {
+                Debug.Log("Could not setup renderer; No camera!");
+                return;
+            }
         }
 
         ptRenderSettings options = a_renderSettings;
@@ -65,14 +75,15 @@ public class ptRenderer {
         // -- Setup Lights
         Light[] allLights = GameObject.FindObjectsOfType<Light>();
         int numLights = allLights.Length;
-        lights = new ptLightHandler[numLights];
+        lights = new List<ptLightHandler>(numLights);
 
         for (int j = 0; j < numLights; j++)
         {
             Light l = allLights[j];
 
             ptLightHandler newLightObject = new ptLightHandler(l);
-            lights[j] = newLightObject;
+            //lights[j] = newLightObject;
+            lights.Add(newLightObject);
         }
 
         if (lightBuffer != null)
@@ -98,6 +109,15 @@ public class ptRenderer {
         for (int i = 0; i < numObjects; i++)
         {
             MeshFilter mf = allMeshes[i];
+
+            //ptBVH ppbvh = new ptBVH();
+            //ppbvh.CreateCacheFriendlyBVH(mf.sharedMesh);
+
+            //ptBVHNode node = ptBVH.ConstructBVH(mf.mesh);
+
+            //Debug.Log("Made BVH");
+            //Debug.Log("Triangles: " + ptBVH.CountTriangles(node));
+
             GameObject obj = mf.gameObject;
             Renderer objRenderer = obj.GetComponent<Renderer>();
             Material objMaterial = objRenderer.sharedMaterial;
@@ -140,10 +160,10 @@ public class ptRenderer {
             
         }
 
-        objects = new ptObjectHandler[outputObjects.Count];
+        objects = new List<ptObjectHandler>(outputObjects.Count);
         for(int z = 0; z < outputObjects.Count; z++)
         {
-            objects[z] = outputObjects[z];
+            objects.Add(outputObjects[z]);
         }
 
         if (objectsBuffer != null)
@@ -177,6 +197,12 @@ public class ptRenderer {
             GameObject.DestroyImmediate(saveTex);
         if(outputTex)
             outputTex.Release();
+
+        if(objects.Count > 0)
+        {
+            objects.Clear();
+        }
+
         if (objectsBuffer != null)
         {
             objectsBuffer.Release();
@@ -187,6 +213,12 @@ public class ptRenderer {
             settingsBuffer.Release();
             settingsBuffer = null;
         }
+
+        if (lights.Count > 0)
+        {
+            lights.Clear();
+        }
+
         if (lightBuffer != null)
         {
             lightBuffer.Release();
@@ -213,6 +245,38 @@ public class ptRenderer {
     // -- Execute shader, pass buffers, check for scene changes
     public RenderTexture RunShader()
     {
+        // Check for transform changes
+        for (int i = objects.Count - 1; i > 0; i--)
+        {
+            if (objects[i].transform == null)
+            {
+                objects.RemoveAt(i);
+                continue;
+            }
+            if (objects[i].transform.hasChanged)
+            {
+                //CacheChanges = t
+                //ResetSamples();
+                ResetRenderer(currentRenderSettings);
+                objects[i].transform.hasChanged = false;
+            }
+        }
+
+        // Check for light changes
+        for(int i = lights.Count - 1; i > 0; i--)
+        {
+            if (lights[i].lightRef == null)
+            {
+                lights.RemoveAt(i);
+                continue;
+            }
+            if(lights[i].lightRef.transform.hasChanged)
+            {
+                ResetRenderer(currentRenderSettings);
+                lights[i].lightRef.transform.hasChanged = false;
+            }
+        }
+
         if (ActiveCamera == null)
         {
             if (Camera.main != null)
@@ -224,18 +288,29 @@ public class ptRenderer {
                 return outputTex;
         }
 
+        // Check for camera movement
+        if (ActiveCamera.transform.hasChanged)
+        {
+            ResetRenderer(currentRenderSettings);
+            ActiveCamera.transform.hasChanged = false;
+        }
+
+
         if (!IsActive)
             return outputTex;
 
         if (!CacheChanges)
             ResetSamples();
 
+        if (objects == null)
+            return outputTex;
+
         int kernelHandle = computeShader.FindKernel("CSMain");
 
         // -- Update Objects
 
         bool shouldUpload = false;
-        for(int i = 0; i < objects.Length; i++)
+        for(int i = 0; i < objects.Count; i++)
         {
             if (!objects[i].transform)
             {
@@ -251,7 +326,7 @@ public class ptRenderer {
         // -- Update Lights
 
         bool shouldUploadLights = false;
-        for(int j = 0; j < lights.Length; j++)
+        for(int j = 0; j < lights.Count; j++)
         {
             if(!lights[j].lightRef)
             {
@@ -322,12 +397,17 @@ public class ptRenderer {
         File.WriteAllBytes(Application.dataPath + a_path + "render - " + System.DateTime.Now.ToString("yyMMddHHmmss") + ".png", bytes);
     }
 
+    void UploadMesh(Mesh a_mesh)
+    {
+        //meshBuffer = new ComputeBuffer()
+    }
+
     // -- Update object buffer to GPU
     void UploadObjects()
     {
-        if (objects.Length > 0)
+        if (objects.Count > 0)
         {
-            int numObjects = objects.Length;
+            int numObjects = objects.Count;
             
             ptObject[] tempObjects = new ptObject[numObjects];
 
@@ -348,9 +428,9 @@ public class ptRenderer {
     // -- Upload light buffer to GPU
     void UploadLights()
     {
-        if(lights.Length > 0)
+        if(lights.Count > 0)
         {
-            int numLights = lights.Length;
+            int numLights = lights.Count;
 
             ptLight[] tempLights = new ptLight[numLights];
 
@@ -366,5 +446,11 @@ public class ptRenderer {
                 computeShader.SetBuffer(kHandle, "lights", lightBuffer);
             }
         }
+    }
+
+    public void SetCamera(Camera a_camera)
+    {
+        ActiveCamera = a_camera;
+        ResetRenderer(currentRenderSettings);
     }
 }

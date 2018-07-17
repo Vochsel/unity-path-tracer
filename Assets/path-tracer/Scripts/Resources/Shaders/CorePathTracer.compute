@@ -129,6 +129,9 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) {
 		ptHit sceneHit;
 
 		if (!intersect_scene(r, t, id, cdepth, sceneHit)) {
+			if(bounces == 0)
+				return float3(0.8,0.8, 0.95);//float3(1., 0.9, 0.3);
+
 			break; //return accucolor;
 		}
 
@@ -159,21 +162,27 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) {
 		float3 d = normalize(u*cos(r1)*r2s + v*sin(r1)*r2s + w*sqrt(1 - r2));
 		
 		// Compute reflected dir
-		float3 reflDir = reflect(r.dir, n);
+		float3 reflDir = reflect(r.dir, nl);
+		float dist = -1.0;
 		r.orig = x + nl*EPSILON;
 		r.dir = lerp(d, reflDir, obj.material.metallic);
 
 		mask *= obj.material.albedo.xyz;
+		//mask *= x;
  
 		// Weigh light contribution using cosine of angle between incident light and normal
 		mask *= dot(d, nl);
 
 		// Fudge mask
-		mask *= 1.5;
+		mask *= 2.5;
+
+		//continue;
 
 		// Return if not first bounce
-		if(bounces > 0)
+		if(bounces > 1)
 			continue;
+
+
 
 		// Look for lights and accumulate lighting information
 		uint numLights, lightStride;
@@ -182,33 +191,41 @@ float3 radiance(Ray r2, inout uint s1, inout uint s2) {
 			for(int i = int(numLights); i--;) {
 
 				float falloff = 0.0;
-				float lightPower = 0.0;
+				float3 lightPower = 0.0;
 				float3 L = float3(0., 0., 0.);
 
 				// Point light
 				if(lights[i].lightType == 0) {
 					float3 lightPos = lights[i].worldMatrix._m03_m13_m23;
 					L = (lightPos - x);
-					L /= lights[i].range/8.0;
+					dist = sqrt(length(L));
+					//st = 1.0;
+					//L /= lights[i].range/8.0;
 					falloff = length(L);
 					L = normalize(L);		
-
-					lightPower = lights[i].intensity * (1./falloff);
+					//lightPower = 1.0;
+					//lightPower = lights[i].intensity * (1./falloff);
+					lightPower = (lights[i].intensity * lights[i].color) / (4. * M_PI * (lights[i].range * lights[i].range));
 				}
 				// Directional light
 				else if(lights[i].lightType == 1) {
 					L = normalize(mul(lights[i].worldMatrix, float4(0., 0., -1., 0.))).xyz;
 					falloff = 1.;
-					lightPower = lights[i].intensity;
+					lightPower = lights[i].intensity * lights[i].color;
 				}
 
 				int sid = 0;
 				float scdepth = 0.0f, st = 0.0f;
 				ptHit ssdepth;
-				Ray sray = MakeRay(x + (nl*EPSILON), L + (d * 0.2));
-	
-				if(!intersect_scene(sray, st, sid, scdepth, ssdepth)) {
-					accucolor += mask * max(0.f, dot(nl, L)) * lights[i].color * lightPower;
+				Ray sray = MakeRay(x , (L) + (d * 0.2));
+
+				bool hit = intersect_scene(sray, st, sid, scdepth, ssdepth);	
+
+				if(dist < st) 
+					accucolor += mask * max(0.f, dot(nl, L))  * lightPower;
+
+				if((dist == -1.0 && !hit)) {
+					accucolor += mask * max(0.f, dot(nl, L))  * lightPower;
 				}
 			}
 		}

@@ -88,6 +88,7 @@ LightmapSettings:
     m_PVRFilteringAtrousPositionSigmaDirect: 0.5
     m_PVRFilteringAtrousPositionSigmaIndirect: 2
     m_PVRFilteringAtrousPositionSigmaAO: 1
+    m_ShowResolutionOverlay: 1
   m_LightingDataAsset: {fileID: 0}
   m_UseShadowmask: 1
 --- !u!196 &4
@@ -202,9 +203,9 @@ Light:
   m_Enabled: 1
   serializedVersion: 8
   m_Type: 2
-  m_Color: {r: 0.89705884, g: 0.80953646, b: 0.6530061, a: 1}
-  m_Intensity: 1
-  m_Range: 10
+  m_Color: {r: 0.85294116, g: 0.5740484, b: 0.07525954, a: 1}
+  m_Intensity: 2
+  m_Range: 0.73
   m_SpotAngle: 30
   m_CookieSize: 10
   m_Shadows:
@@ -236,7 +237,7 @@ Transform:
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 53514439}
   m_LocalRotation: {x: 0.26267493, y: -0.07800725, z: 0.31558487, w: 0.9084729}
-  m_LocalPosition: {x: -0.65, y: 0.81, z: -3.19}
+  m_LocalPosition: {x: 1.85, y: 2.06, z: -0.36}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
@@ -352,8 +353,8 @@ Light:
   serializedVersion: 8
   m_Type: 2
   m_Color: {r: 0.9485294, g: 0.725346, b: 0.725346, a: 1}
-  m_Intensity: 1.54
-  m_Range: 4.26
+  m_Intensity: 5.93
+  m_Range: 0.97
   m_SpotAngle: 30
   m_CookieSize: 10
   m_Shadows:
@@ -385,7 +386,7 @@ Transform:
   m_PrefabInternal: {fileID: 0}
   m_GameObject: {fileID: 1620933794}
   m_LocalRotation: {x: 0.26267493, y: -0.07800725, z: 0.31558487, w: 0.9084729}
-  m_LocalPosition: {x: -0.65, y: 0.65, z: -0.91}
+  m_LocalPosition: {x: -2.654, y: 1.186, z: -0.9}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_Children: []
   m_Father: {fileID: 0}
@@ -454,6 +455,7 @@ Camera:
   m_TargetEye: 3
   m_HDR: 1
   m_AllowMSAA: 1
+  m_AllowDynamicResolution: 0
   m_ForceIntoRT: 0
   m_OcclusionCulling: 1
   m_StereoConvergence: 10
@@ -532,9 +534,9 @@ MeshCollider:
   m_Material: {fileID: 0}
   m_IsTrigger: 0
   m_Enabled: 1
-  serializedVersion: 2
+  serializedVersion: 3
   m_Convex: 0
-  m_InflateMesh: 0
+  m_CookingOptions: 14
   m_SkinWidth: 0.01
   m_Mesh: {fileID: 10209, guid: 0000000000000000e000000000000000, type: 0}
 --- !u!33 &2068325520

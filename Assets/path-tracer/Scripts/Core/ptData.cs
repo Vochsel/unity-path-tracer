@@ -30,6 +30,17 @@ public enum ptLightType : uint
     SPOT
 }
 
+public struct ptTriangle
+{
+    public Vector3 p1, p2, p3;
+    public ptTriangle(Vector3 a_v1, Vector3 a_v2, Vector3 a_v3)
+    {
+        p1 = a_v1;
+        p2 = a_v2;
+        p3 = a_v3;
+    }
+}
+
 public struct ptObject
 {
     public ptMaterial material;
@@ -231,3 +242,8 @@ public struct ptRenderSettings
     }
 
 };*/
+
+public struct ptBoundingBox
+{
+
+};
